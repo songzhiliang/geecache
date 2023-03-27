@@ -99,16 +99,6 @@ func (g *Group) Get(key string) (ByteView, error) {
 // 获取缓存值：缓存数据源有多种源头，比如从本地获取，从远程获取
 // 这里暂时定义，直接从本地获取！
 func (g *Group) load(key string) (value ByteView, err error) {
-	if g.peers != nil { //配置了远程分布式缓存获取算法
-		if peer, ok := g.peers.PickPeer(key); ok { //peer是一个从分布式缓存系统获取缓存数据的http客户端
-			if value, err = g.getFromPeer(peer, key); err == nil {
-				return value, nil
-			}
-			log.Println("[GeeCache] Failed to get from peer", err)
-		}
-	}
-
-	return g.getLocally(key)
 	viewi, err := g.loader.Do(key, func() (interface{}, error) {
 		if g.peers != nil { //配置了远程分布式缓存获取算法
 			if peer, ok := g.peers.PickPeer(key); ok { //peer是一个从分布式缓存系统获取缓存数据的http客户端
