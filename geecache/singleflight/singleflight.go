@@ -8,9 +8,7 @@
 package singleflight
 
 import (
-	"fmt"
 	"sync"
-	"time"
 )
 
 // call is an in-flight or completed Do call
@@ -37,9 +35,7 @@ func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 		g.m = make(map[string]*call)
 	}
 	if c, ok := g.m[key]; ok {
-		fmt.Println("if Println:", time.Now().Nanosecond())
 		g.mu.Unlock()
-		fmt.Println("if Wait:", time.Now().Nanosecond())
 		c.wg.Wait()
 		return c.val, c.err
 	}
@@ -47,12 +43,9 @@ func (g *Group) Do(key string, fn func() (interface{}, error)) (interface{}, err
 	c.wg.Add(1)
 	g.m[key] = c
 	g.mu.Unlock()
-	fmt.Println("Sleep:", time.Now().Nanosecond())
-	time.Sleep(time.Second * 2)
 
 	c.val, c.err = fn()
 	c.wg.Done()
-	fmt.Println("Done:", time.Now().Nanosecond())
 
 	g.mu.Lock()
 	delete(g.m, key)
