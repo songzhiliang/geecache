@@ -1,0 +1,57 @@
+/*
+ * @Description:
+ * @version:
+ * @Author: Steven
+ * @Date: 2023-03-29 23:10:38
+ */
+package main
+
+import (
+	"fmt"
+	"geerpc"
+	"log"
+	"net"
+	"sync"
+	"time"
+)
+
+func startServer(addr chan string) {
+	// pick a free port
+	l, err := net.Listen("tcp", "127.0.0.1:9999")
+	if err != nil {
+		log.Fatal("network error:", err)
+	}
+	log.Println("start rpc server on", l.Addr())
+	addr <- l.Addr().String()
+	geerpc.Accept(l)
+}
+
+func main() {
+	log.SetFlags(log.Ltime | log.Llongfile)
+	addr := make(chan string)
+	go startServer(addr)
+
+	// in fact, following code is like a simple geerpc client
+	client, _ := geerpc.Dial("tcp", <-addr)
+	//conn.SetDeadline(time.Time{})
+	defer func() { _ = client.Close() }()
+
+	time.Sleep(time.Second)
+	log.Println("Sleep after")
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := fmt.Sprintf("geerpc req %d", i)
+			var reply string
+			//Call：阻塞调用，直到接收服务端响应结果的receive方法，调用call.Done才会结束阻塞
+			if err := client.Call("Foo.Sum", args, &reply); err != nil {
+				log.Fatal("call Foo.Sum error:", err)
+			}
+			//进而实现下面的打印结果，等待receive方法接收到服务端响应结果之后才会打印！
+			log.Println("reply:", reply)
+		}(i)
+	}
+	wg.Wait()
+}

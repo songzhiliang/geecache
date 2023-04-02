@@ -1,0 +1,68 @@
+/*
+ * @Description:
+ * @version:
+ * @Author: Steven
+ * @Date: 2023-03-29 23:10:38
+ */
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"geerpc"
+	"geerpc/codec"
+	"log"
+	"net"
+	"time"
+)
+
+func startServer(addr chan string) {
+	// pick a free port
+	l, err := net.Listen("tcp", "127.0.0.1:9999")
+	if err != nil {
+		log.Fatal("network error:", err)
+	}
+	log.Println("start rpc server on", l.Addr())
+	addr <- l.Addr().String()
+	geerpc.Accept(l)
+}
+
+func main() {
+	log.SetFlags(log.Ltime | log.Llongfile)
+	addr := make(chan string)
+	go startServer(addr)
+
+	// in fact, following code is like a simple geerpc client
+	conn, _ := net.Dial("tcp", <-addr) //一次连接
+	//conn.SetDeadline(time.Time{})
+	defer func() { _ = conn.Close() }()
+
+	time.Sleep(time.Second * 2)
+	log.Println("Sleep after")
+	// 首先向conn连接写入默认的协商协议geerpc.DefaultOption
+	//func json.NewEncoder(w io.Writer) *json.Encoder：参数得是实现了io.Writer的类型，而conn就是实现了io.Writer！
+	//首先json.NewEncoder(conn)：创建一个可以将数据写入conn的编码器
+	//调用Encode(geerpc.DefaultOption)方法，就是将geerpc.DefaultOption编码之后的内容
+	//通过约定必须实现的方法Write(b []byte) (n int, err error)吸入conn连接中
+	//其实最终就是调用了conn.Write方法，将序列化之后的内容发送到服务端！没调用一次conn.Write方法，就向服务端发送一次请求！
+	_ = json.NewEncoder(conn).Encode(geerpc.DefaultOption) //此时服务端就会接收到第一次客户端发送来的请求，发送的数据就是协商信息
+
+	log.Println("DefaultOption after")
+	//协商信息发送给客户端之后，开始发送header和body信息
+	cc := codec.NewGobCodec(conn) //实例化一个编解码实例
+	// send request & receive response
+	time.Sleep(time.Second * 2)
+	for i := 0; i < 5; i++ { //多次请求
+		h := &codec.Header{ //实例话header头
+			ServiceMethod: "Foo.Sum",
+			Seq:           uint64(i),
+		}
+		log.Printf("client Write before %d\n", i)
+		//fmt.Sprintf("geerpc req %d", h.Seq)是body信息
+		_ = cc.Write(h, fmt.Sprintf("geerpc req %d", h.Seq)) //此时就向服务端发送了一次请求数据
+		_ = cc.ReadHeader(h)
+		var reply string
+		_ = cc.ReadBody(&reply) //获取服务端响应的body信息
+		log.Println("reply:", reply)
+	}
+}

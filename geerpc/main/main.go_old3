@@ -1,0 +1,67 @@
+/*
+ * @Description:
+ * @version:
+ * @Author: Steven
+ * @Date: 2023-03-29 23:10:38
+ */
+package main
+
+import (
+	"context"
+	"geerpc"
+	"log"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+)
+
+type Foo int
+
+type Args struct{ Num1, Num2 int }
+
+func (f Foo) Sum(args Args, reply *int) error {
+	*reply = args.Num1 + args.Num2
+	return nil
+}
+
+func startServer(addrCh chan string) {
+	var foo Foo
+	l, _ := net.Listen("tcp", "127.0.0.1:9999")
+	_ = geerpc.Register(&foo)
+	geerpc.HandleHTTP() //路由跟处理器的映射注册
+	addrCh <- l.Addr().String()
+	//http.Serve会接手监听器l收到的每一个连接，并为每一个连接创建一个新的服务go程。该go程会读取请求，然后调用handler回复请求
+	_ = http.Serve(l, nil) //http.Serve里有一个for死循环一直监听请求
+}
+
+func call(addrCh chan string) {
+	client, _ := geerpc.DialHTTP("tcp", <-addrCh) //拨号进行连接到服务端
+	defer func() { _ = client.Close() }()
+
+	time.Sleep(time.Second)
+	// send request & receive response
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := &Args{Num1: i, Num2: i * i}
+			var reply int
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+			//Call：阻塞调用，直到接收服务端响应结果的receive方法，调用call.Done才会结束阻塞
+			if err := client.Call(ctx, "Foo.Sum", args, &reply); err != nil {
+				log.Fatal("call Foo.Sum error:", err)
+			}
+			log.Printf("%d + %d = %d", args.Num1, args.Num2, reply)
+		}(i)
+	}
+	wg.Wait()
+}
+
+func main() {
+	log.SetFlags(log.Lmicroseconds | log.Llongfile)
+	ch := make(chan string)
+	go call(ch)
+	startServer(ch) //会一直阻塞在此函数里！
+}
