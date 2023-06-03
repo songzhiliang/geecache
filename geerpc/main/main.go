@@ -87,7 +87,7 @@ func call(registry string) {
 }
 
 // 通过广播的形式，来选择可用的节点
-// 这个属于失败模式的范畴
+// 这个属于失败模式的范畴111
 func broadcast(registry string) {
 	d := xclient.NewGeeRegistryDiscovery(registry, 0)
 	xc := xclient.NewXClient(d, xclient.RandomSelect, nil)
