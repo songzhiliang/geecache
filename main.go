@@ -87,3 +87,11 @@ func main() {
 	//根据命令行参数，分别使用addrMap下的三个端开启三个服务端，这三个服务用户是看不到的
 	startCacheServer(addrMap[port], []string(addrs), gee)
 }
+
+type good interface {
+	getName() string
+}
+
+type car interface {
+	getPrice() float64
+}
